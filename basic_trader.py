@@ -7,7 +7,7 @@ import datetime
 # Bid = buy
 # ask = sell
 
-sys.stdout = open('output.txt', 'w')
+#sys.stdout = open('output.txt', 'w')
 print("Running: {}".format(datetime.datetime.now()))
 
 import logging
@@ -17,7 +17,7 @@ logger.setLevel('ERROR')
 print("Setup was successful!")
 
 def get_prices(trade):
-    if trade == 'trade':
+    '''if trade == 'trade':
         # sell basket, buy google and amazon
         tech_basket = get_best_price('TECH_BASKET', 'ask')
         google = get_best_price('GOOGLE', 'bid')
@@ -26,7 +26,17 @@ def get_prices(trade):
         # buy basket, sell google and amazon
         tech_basket = get_best_price('TECH_BASKET', 'bid')
         google = get_best_price('GOOGLE', 'ask')
+        amazon = get_best_price('AMAZON', 'ask')'''
+    if trade == 'trade':
+        # sell basket, buy google and amazon
+        tech_basket = get_best_price('TECH_BASKET', 'bid')
+        google = get_best_price('GOOGLE', 'ask')
         amazon = get_best_price('AMAZON', 'ask')
+    elif trade == 'reverse_trade':
+        # buy basket, sell google and amazon
+        tech_basket = get_best_price('TECH_BASKET', 'ask')
+        google = get_best_price('GOOGLE', 'bid')
+        amazon = get_best_price('AMAZON', 'bid')    
     elif trade == 'check_bid':
         tech_basket = get_best_price('TECH_BASKET', 'bid')
         google = get_best_price('GOOGLE', 'bid')
@@ -58,51 +68,60 @@ def get_best_price(instrument, side):
         raise KeyError("{} is not a valid key".format(side))
                     
                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            
-def trade():
-    print('Selling basket, buying individual stock')
-    e.insert_order('TECH_BASKET', price=get_best_price('TECH_BASKET', 'ask'),
+def trade(basket_price, google_price, amazon_price):
+    #print('Selling basket, buying individual stock')
+    #e.insert_order('TECH_BASKET', price=get_best_price('TECH_BASKET', 'ask'),
+    #                volume=1, side='ask', order_type='ioc')
+    e.insert_order('TECH_BASKET', basket_price,
                     volume=1, side='ask', order_type='ioc')
-    e.insert_order('GOOGLE', price=get_best_price('GOOGLE', 'bid'),
+    e.insert_order('GOOGLE', google_price,
                     volume=1, side='bid', order_type='ioc')
-    e.insert_order('AMAZON', price=get_best_price('AMAZON', 'bid'),
+    e.insert_order('AMAZON', amazon_price,
                     volume=1, side='bid', order_type='ioc')
 
     
-def reverse_trade():
-    print('Buying basket, selling individual stock')
-    e.insert_order('TECH_BASKET', price=get_best_price('TECH_BASKET', 'bid'),
+def reverse_trade(basket_price, amazon_price, google_price):
+    #print('Buying basket, selling individual stock')
+    #e.insert_order('TECH_BASKET', price=get_best_price('TECH_BASKET', 'bid'),
+    #                volume=1, side='bid', order_type='ioc')
+    #e.insert_order('GOOGLE', price=get_best_price('GOOGLE', 'ask'),
+    #                volume=1, side='ask', order_type='ioc')
+    #e.insert_order('AMAZON', price=get_best_price('AMAZON', 'ask'),
+    #                volume=1, side='ask', order_type='ioc')
+    e.insert_order('TECH_BASKET', basket_price,
                     volume=1, side='bid', order_type='ioc')
-    e.insert_order('GOOGLE', price=get_best_price('GOOGLE', 'ask'),
+    e.insert_order('GOOGLE', google_price,
                     volume=1, side='ask', order_type='ioc')
-    e.insert_order('AMAZON', price=get_best_price('AMAZON', 'ask'),
-                    volume=1, side='ask', order_type='ioc')
-                    
+    e.insert_order('AMAZON', amazon_price,
+                    volume=1, side='ask', order_type='ioc')                
 
 
 e = Exchange()
 a = e.connect()
 
 instruments = ["GOOGLE", "AMAZON", "TECH_BASKET"]
-trade_threshold = 0.1
+trade_threshold = 1.0#0.2
 reverse_threshold = 1e-6
-
 #Do the trading
 try:
     trade_loop = 0
+    print('Trying to do the thing')
     while (trade_loop < 3): 
-        print('Trade loop {}'.format(trade_loop))
+        '''print('Trade loop {}'.format(trade_loop))
         basket_price0, google_price0, amazon_price0 = get_prices('check_ask')
         basket_price1, google_price1, amazon_price1 = get_prices('check_bid')
         diff = (basket_price0+google_price0+amazon_price0)-(basket_price1+google_price1+amazon_price1)
-        print('Overall diff {}'.format(diff))
+        print('Overall diff {}'.format(diff))'''
         
         while True:
             try:
                 basket_price, google_price, amazon_price = get_prices('trade')
               
                 if basket_price_diff(basket_price, amazon_price, google_price)>trade_threshold:
-                    trade()
+                    #print('trying to trade b: {}, a: {}, g:{}'.format(basket_price, amazon_price, google_price))
+                    trade(basket_price-0.1, amazon_price+0.1, google_price+0.1) # add some change to make us competitive?
                     print('Profit & loss: {}'.format(e.get_pnl()))
+                    print('traded b: {}, a: {}, g:{}'.format(basket_price, amazon_price, google_price))
                     break
             except:
                 pass
@@ -111,7 +130,7 @@ try:
                 basket_price, google_price, amazon_price = get_prices('reverse_trade')
                
                 if basket_price_diff(basket_price, amazon_price, google_price)<reverse_threshold:
-                    reverse_trade()
+                    reverse_trade(basket_price, amazon_price, google_price)
                     print('Profit & loss: {}'.format(e.get_pnl()))
                     break
             except:
@@ -125,9 +144,10 @@ try:
         time.sleep(6 * 0.040)
         trade_loop += 1
         
-    sys.stdout.close()
+    #sys.stdout.close()
 except:
     print('Oh no!')
+    print(sys.exc_info()[0])
     print('Number of trades:', trade_loop)
     print(e.get_positions())
     for s, p in e.get_positions().items():
@@ -136,4 +156,4 @@ except:
         elif p < 0:
             e.insert_order(s, price=get_best_price(s, 'ask'), volume=-p, side='bid', order_type='ioc')  
     print(e.get_positions())
-    sys.stdout.close()
+    #sys.stdout.close()
