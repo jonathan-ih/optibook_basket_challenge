@@ -148,6 +148,7 @@ def clear_initial_positions():
             order = e.insert_order(inst, price=sell_prices[inst], volume=positions[inst], side='ask', order_type='ioc')
         elif (positions[inst] < 0):
             order = e.insert_order(inst, price=buy_prices[inst], volume=-positions[inst], side='bid', order_type='ioc')
+    
 
 ################################################################################
 
@@ -168,30 +169,39 @@ while True:
     if (not (buy_google and buy_amazon and buy_basket and
         sell_google and sell_amazon and sell_basket)):
         continue
+    else:
+            buy_prices = {'GOOGLE' : buy_google,
+                          'AMAZON' : buy_amazon,
+                          'TECH_BASKET' : buy_basket}
+            sell_prices = {'GOOGLE' : sell_google,
+                          'AMAZON' : sell_amazon,
+                          'TECH_BASKET' : sell_basket}
     
     individual_cost_to_buy = buy_google + buy_amazon
     individual_cost_to_sell = sell_google + sell_amazon
     basket_cost_to_buy = buy_basket
     basket_cost_to_sell = sell_basket
+    spread_google = sell_google - buy_google
+    spread_amazon = sell_amazon - buy_amazon
     
     if (individual_cost_to_buy < basket_cost_to_buy or 
         individual_cost_to_sell < basket_cost_to_sell):
         # Cheaper to buy individual stocks than basket
         # OR Make more money by selling baskets than selling individually
         # Buy individual stocks and sell basket
-        e.insert_order('TECH_BASKET', price=sell_basket, volume=1, side='ask', order_type='ioc')      # Place on ask side of order book to match highest bid
-        e.insert_order('GOOGLE', price=buy_google, volume=1, side='bid', order_type='ioc')            # Place on bid side of order book to match lowest ask
-        e.insert_order('AMAZON', price=buy_amazon, volume=1, side='bid', order_type='ioc')            # Place on bid side of order book to match lowest ask
+        e.insert_order('TECH_BASKET', price=sell_basket, volume=10, side='ask', order_type='ioc')      # Place on ask side of order book to match highest bid
+        e.insert_order('GOOGLE', price=buy_google, volume=10, side='bid', order_type='ioc')            # Place on bid side of order book to match lowest ask
+        e.insert_order('AMAZON', price=buy_amazon, volume=10, side='bid', order_type='ioc')            # Place on bid side of order book to match lowest ask
         
         
     elif (individual_cost_to_buy > basket_cost_to_buy or
-          individual_cost_to_sell < basket_cost_to_sell):
+          individual_cost_to_sell > basket_cost_to_sell):
         # Cheaper to buy baskets than individual stocks
         # OR Make more money by selling individually than selling baskets
         # Buy baskets and sell individual stocks
-        e.insert_order('TECH_BASKET', price=buy_basket, volume=1, side='bid', order_type='ioc')       # Place on bid side of order book to match lowest ask
-        e.insert_order('GOOGLE', price=sell_google, volume=1, side='ask', order_type='ioc')           # Place on ask side of order book to match highest bid
-        e.insert_order('AMAZON', price=sell_amazon, volume=1, side='ask', order_type='ioc')           # Place on ask side of order book to match highest bid
+        e.insert_order('TECH_BASKET', price=buy_basket, volume=10, side='bid', order_type='ioc')       # Place on bid side of order book to match lowest ask
+        e.insert_order('GOOGLE', price=sell_google, volume=10, side='ask', order_type='ioc')           # Place on ask side of order book to match highest bid
+        e.insert_order('AMAZON', price=sell_amazon, volume=10, side='ask', order_type='ioc')           # Place on ask side of order book to match highest bid
         
     time.sleep(3 * 0.04)
     
@@ -212,30 +222,28 @@ while True:
     #          drive the market ourselves
     # Choose 1 for now
     
-    # TODO Currently not all orders complete (no one wants to buy/sell) so 
-    # positions no longer of the form 
-    #    {'GOOGLE' : +x,
-    #     'AMAZON' : +x,
-    #     'TECH_BASKET' : -x}
-    # If the signs change the program can attempt to buy/sell a negative number
-    # Fix by checking to see if order is completed, not double posting orders
-    
+    # Delete any existing orders
+    for inst in instruments:
+        outstanding = e.get_outstanding_orders(inst)
+        for o in outstanding.values():
+            result = e.delete_order(inst, order_id=o.order_id)
+            
     positions = e.get_positions()
-    if (positions['TECH_BASKET'] > 0):
-        # Sell excess tech basket then buy individual stocks (note -ve sign on volume)
-        e.insert_order('TECH_BASKET', price=((buy_basket + sell_basket) / 2), volume=positions["TECH_BASKET"], side='ask', order_type='ioc')
-        e.insert_order('GOOGLE', price=((buy_google + sell_google) / 2), volume=-positions["GOOGLE"], side='bid', order_type='ioc')
-        e.insert_order('AMAZON', price=((buy_amazon + sell_amazon) / 2), volume=-positions["AMAZON"], side='bid', order_type='ioc')
-    elif (positions['TECH_BASKET'] < 0):
-        # Sell excess individual stock then buy basket (note -ve sign on volume)
-        e.insert_order('GOOGLE', price=((buy_google + sell_google) / 2), volume=positions["GOOGLE"], side='ask', order_type='ioc')
-        e.insert_order('AMAZON', price=((buy_amazon + sell_amazon) / 2), volume=positions["AMAZON"], side='ask', order_type='ioc')
-        e.insert_order('TECH_BASKET', price=((buy_basket + sell_basket) / 2), volume=-positions["TECH_BASKET"], side='bid', order_type='ioc')
-    else:
-        # No positions to close
+    if (positions[inst] > 0):
+        order = e.insert_order(inst, price=((sell_prices[inst] + buy_prices[inst]) / 2), volume=positions[inst], side='ask', order_type='ioc')
+    elif (positions[inst] < 0):
+        order = e.insert_order(inst, price=((sell_prices[inst] + buy_prices[inst]) / 2), volume=-positions[inst], side='bid', order_type='ioc')
+        
+    # If the position on any stock is greater than +/-500, wait for orders to clear
+    while (e.get_positions()['GOOGLE'] >= 500 or e.get_positions()['AMAZON'] >= 500 or e.get_positions()['TECH_BASKET'] >= 500 or
+           e.get_positions()['GOOGLE'] <= -500 or e.get_positions()['AMAZON'] <= -500 or e.get_positions()['TECH_BASKET'] <= -500):
         pass
 
     print("{}\t{}".format(e.get_pnl(), e.get_positions()))
+    for inst in instruments:
+        outstanding = e.get_outstanding_orders(inst)
+        for o in outstanding.values():
+            print("\tOutstanding order: order_id({}), instrument_id({}), price({}), volume({}), side({})".format(o.order_id, o.instrument_id, o.price, o.volume, o.side))
     time.sleep(3 * 0.04)
 
 #trade_threshold = 1.0#0.2
